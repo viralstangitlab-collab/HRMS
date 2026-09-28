@@ -36,8 +36,6 @@ const HOLIDAYS_2026 = new Map([
   ['2026-05-28', 'Bakri ID (Id-Uz-Zuha)'],
   ['2026-08-15', 'Independence Day'],
   ['2026-08-26', 'Id A Milad (Milad-Un-Nabi)'],
-  ['2026-09-04', 'Janmashtami'],
-  ['2026-09-17', 'Vishwakarma Pooja'],
   ['2026-10-02', 'Mahatma Gandhi Jayanthi'],
   ['2026-10-19', 'Saraswathi Pooja/Mahanavami'],
   ['2026-10-20', 'Dussehra'],
@@ -146,7 +144,29 @@ async function employeeNameMap() {
 }
 
 function withNames(records, nameMap) {
-  return records.map((record) => ({ ...record, employeeName: nameMap.get(record.deviceUserId) || null }));
+  return records.map((record) => {
+    const deviceUserId = normalizeEnrollmentId(record.deviceUserId);
+    return { ...record, deviceUserId, employeeName: nameMap.get(deviceUserId) || null };
+  });
+}
+
+function completeEmployeeList(employees, attendanceIds) {
+  const byId = new Map(employees.map((employee) => [employee.deviceUserId, employee]));
+  for (const rawId of attendanceIds) {
+    const deviceUserId = normalizeEnrollmentId(rawId);
+    if (!byId.has(deviceUserId)) {
+      byId.set(deviceUserId, {
+        _id: null,
+        deviceUserId,
+        name: `Unnamed #${Number(deviceUserId)}`,
+        active: true,
+        placeholder: true,
+      });
+    }
+  }
+  return [...byId.values()].sort((a, b) =>
+    a.deviceUserId.localeCompare(b.deviceUserId, undefined, { numeric: true })
+  );
 }
 
 function normalizeEnrollmentId(value) {
@@ -253,9 +273,9 @@ function localDateKey(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-// Attribute OUT punches to the date on which their corresponding shift began.
-// This keeps an afternoon/night IN and its after-midnight OUT in one workday.
-// A 20-hour safety limit prevents a stale, unmatched IN from capturing later OUTs.
+// The attendance workday changes at 6 AM rather than midnight. This keeps every
+// punch from an evening/night shift (including after-midnight break re-entries)
+// on the date on which that shift started.
 function attendanceDateGroups(records) {
   const byUser = new Map();
   for (const record of records) {
@@ -265,19 +285,11 @@ function attendanceDateGroups(records) {
   const groups = new Map();
   for (const punches of byUser.values()) {
     punches.sort((a, b) => new Date(a.recordTime) - new Date(b.recordTime));
-    let activeIn = null;
-    let activeDate = null;
     for (const punch of punches) {
       const punchTime = new Date(punch.recordTime);
-      let date = localDateKey(punchTime);
-      if (punch.punchType === 'IN') {
-        activeIn = punchTime;
-        activeDate = date;
-      } else if (punch.punchType === 'OUT' && activeIn) {
-        const elapsed = punchTime - activeIn;
-        if (elapsed >= 0 && elapsed <= 20 * 60 * 60 * 1000) date = activeDate;
-        else { activeIn = null; activeDate = null; }
-      }
+      const workday = new Date(punchTime);
+      if (workday.getHours() < 6) workday.setDate(workday.getDate() - 1);
+      const date = localDateKey(workday);
       if (!groups.has(date)) groups.set(date, []);
       groups.get(date).push(punch);
     }
@@ -285,7 +297,7 @@ function attendanceDateGroups(records) {
   return groups;
 }
 
-function buildRangeSummary(records, fromText, toText, selectedEmployee) {
+function buildRangeSummary(records, fromText, toText, selectedEmployee, employeeDirectory = []) {
   const groups = attendanceDateGroups(records);
   const now = new Date();
   const result = [...groups.entries()].filter(([date]) => date >= fromText && date <= toText).flatMap(([date, dayRecords]) => {
@@ -294,17 +306,26 @@ function buildRangeSummary(records, fromText, toText, selectedEmployee) {
     const start = new Date(year, month - 1, day);
     const effectiveEnd = now >= start && now < end ? now : end;
     const dayOff = nonWorkingDay(date);
-    return buildDailyReport(dayRecords, effectiveEnd).map((entry) => ({ date, ...entry, punches: undefined, dayStatus: dayOff?.status || null, dayLabel: dayOff?.label || null }));
+    return buildDailyReport(dayRecords, effectiveEnd).map((entry) => ({
+      date,
+      ...entry,
+      punches: undefined,
+      // A holiday is still a worked day for anyone who actually punched.
+      // Keep the holiday label only for employees without attendance activity.
+      dayStatus: entry.punchCount > 0 ? null : dayOff?.status || null,
+      dayLabel: entry.punchCount > 0 ? null : dayOff?.label || null,
+    }));
   });
-  if (selectedEmployee) {
-    const existing = new Map(result.map((entry) => [entry.date, entry]));
+  const employeesToFill = selectedEmployee ? [selectedEmployee] : employeeDirectory;
+  for (const employee of employeesToFill) {
     const [fy, fm, fd] = fromText.split('-').map(Number);
     const [ty, tm, td] = toText.split('-').map(Number);
     for (let cursor = new Date(fy, fm - 1, fd), end = new Date(ty, tm - 1, td); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
       const date = localDateKey(cursor);
-      if (!existing.has(date)) {
-        const dayOff = nonWorkingDay(date);
-        result.push({ date, deviceUserId: selectedEmployee.deviceUserId, employeeName: selectedEmployee.name, absent: !dayOff, dayStatus: dayOff?.status || null, dayLabel: dayOff?.label || null, firstIn: null, lastOut: null, insideMs: 0, punchCount: 0, sessions: [] });
+      const hasEmployeeEntry = result.some((entry) => entry.date === date && entry.deviceUserId === employee.deviceUserId);
+      const dayOff = nonWorkingDay(date);
+      if (!hasEmployeeEntry && (selectedEmployee || dayOff)) {
+        result.push({ date, deviceUserId: employee.deviceUserId, employeeName: employee.name, absent: !dayOff, dayStatus: dayOff?.status || null, dayLabel: dayOff?.label || null, firstIn: null, lastOut: null, insideMs: 0, punchCount: 0, sessions: [] });
       }
     }
   }
@@ -426,18 +447,22 @@ const server = http.createServer(async (req, res) => {
         Employee.find().sort({ deviceUserId: 1 }).lean(),
         Attendance.distinct('deviceUserId'),
       ]);
-      const namedIds = new Set(employees.filter((employee) => employee.name?.trim()).map((employee) => employee.deviceUserId));
-      const unnamedIds = attendanceIds.filter((id) => !namedIds.has(id)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-      return json(res, 200, { employees, unnamedIds, departments, employeeRoles });
+      const namedIds = new Set(employees.filter((employee) => employee.name?.trim()).map((employee) => normalizeEnrollmentId(employee.deviceUserId)));
+      const unnamedIds = [...new Set(attendanceIds.map(normalizeEnrollmentId))]
+        .filter((id) => !namedIds.has(id))
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      return json(res, 200, { employees: completeEmployeeList(employees, attendanceIds), unnamedIds, departments, employeeRoles });
     }
     if (req.method === 'GET' && url.pathname === '/api/monthly-summary') {
       const monthStr = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(monthStr)) return json(res, 400, { error: 'Invalid month' });
       const { start, end, days, year, month } = monthRangeLocal(monthStr);
-      const [records, employees] = await Promise.all([
+      const [records, storedEmployees, attendanceIds] = await Promise.all([
         Attendance.find({ recordTime: { $gte: new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1), $lt: new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1) } }).sort({ recordTime: 1 }).lean(),
         Employee.find().sort({ deviceUserId: 1 }).lean(),
+        Attendance.distinct('deviceUserId'),
       ]);
+      const employees = completeEmployeeList(storedEmployees, attendanceIds);
       const nameMap = new Map(employees.map((employee) => [employee.deviceUserId, employee.name]));
       const named = withNames(records, nameMap);
       const byDate = attendanceDateGroups(named);
@@ -454,10 +479,6 @@ const server = http.createServer(async (req, res) => {
       for (let day = 1; day <= days; day += 1) {
         const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         if (key > todayKey) continue;
-        if (nonWorkingDay(key)) {
-          for (const stat of perEmployee.values()) stat.presentDays += 1;
-          continue;
-        }
         const dayEnd = key === todayKey ? now : new Date(year, month - 1, day + 1);
         const report = buildDailyReport(byDate.get(key) || [], dayEnd);
         const seen = new Set();
@@ -474,6 +495,7 @@ const server = http.createServer(async (req, res) => {
           else if (quality === 'red') stat.redDays += 1;
           else stat.absentDays += 1;
         }
+        if (nonWorkingDay(key)) continue;
         for (const [deviceUserId, stat] of perEmployee) {
           if (!seen.has(deviceUserId)) stat.absentDays += 1;
         }
@@ -490,12 +512,16 @@ const server = http.createServer(async (req, res) => {
       const monthStr = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(monthStr)) return json(res, 400, { error: 'Invalid month' });
       const { start, end, days, year, month } = monthRangeLocal(monthStr);
-      const [employee, records] = await Promise.all([
+      const alternateId = /^0+\d+$/.test(deviceUserId) ? String(Number(deviceUserId)) : deviceUserId;
+      const [storedEmployee, records] = await Promise.all([
         Employee.findOne({ deviceUserId }).lean(),
-        Attendance.find({ deviceUserId, recordTime: { $gte: new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1), $lt: new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1) } }).sort({ recordTime: 1 }).lean(),
+        Attendance.find({ deviceUserId: { $in: [...new Set([deviceUserId, alternateId])] }, recordTime: { $gte: new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1), $lt: new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1) } }).sort({ recordTime: 1 }).lean(),
       ]);
+      const employee = storedEmployee || (records.length ? {
+        deviceUserId, name: `Unnamed #${Number(deviceUserId)}`, placeholder: true,
+      } : null);
       if (!employee) return json(res, 404, { error: 'Employee not found' });
-      const byDate = attendanceDateGroups(records);
+      const byDate = attendanceDateGroups(withNames(records, new Map([[deviceUserId, employee.name]])));
       const now = new Date();
       const todayKey = localDateKey(now);
       const dayList = [];
@@ -508,8 +534,7 @@ const server = http.createServer(async (req, res) => {
         const minutes = entry ? Math.round(entry.insideMs / 60000) : 0;
         const punchCount = entry ? entry.punchCount : 0;
         const dayOff = nonWorkingDay(key);
-        if (dayOff) {
-          summary.presentDays += 1;
+        if (dayOff && punchCount === 0) {
           dayList.push({
             date: key, status: dayOff.status, dayLabel: dayOff.label, minutes, punchCount,
             firstIn: entry?.firstIn || null, lastOut: entry?.lastOut || null,
@@ -572,12 +597,33 @@ const server = http.createServer(async (req, res) => {
       const employeeId = await resolveEnrollmentId(employee);
       const reportQuery = { recordTime: { $gte: contextStart, $lt: contextEnd } };
       if (employeeId) reportQuery.deviceUserId = employeeId;
-      const [records, nameMap] = await Promise.all([
+      const [records, storedEmployees, allAttendanceIds] = await Promise.all([
         Attendance.find(reportQuery).sort({ recordTime: 1 }).lean(),
-        employeeNameMap(),
+        Employee.find().sort({ deviceUserId: 1 }).lean(),
+        Attendance.distinct('deviceUserId'),
       ]);
+      const directory = completeEmployeeList(storedEmployees, allAttendanceIds);
+      const nameMap = new Map(directory.map((entry) => [entry.deviceUserId, entry.name]));
       const requestedRecords = attendanceDateGroups(withNames(records, nameMap)).get(requested) || [];
-      const employees = buildDailyReport(requestedRecords, effectiveEnd);
+      const activity = buildDailyReport(requestedRecords, effectiveEnd);
+      const activityById = new Map(activity.map((entry) => [entry.deviceUserId, entry]));
+      const employees = (employeeId
+        ? directory.filter((entry) => entry.deviceUserId === employeeId)
+        : directory
+      ).map((entry) => activityById.get(entry.deviceUserId) || {
+        deviceUserId: entry.deviceUserId,
+        employeeName: entry.name,
+        firstIn: null,
+        lastOut: null,
+        insideMs: 0,
+        isComplete: false,
+        hasIncompletePunch: false,
+        currentStatus: 'ABSENT',
+        punchCount: 0,
+        sessions: [],
+        punches: [],
+        absent: true,
+      });
       return json(res, 200, {
         date: requested,
         employees,
@@ -605,10 +651,13 @@ const server = http.createServer(async (req, res) => {
       const rawEnd = localDate(toText, true);
       const query = { recordTime: { $gte: new Date(rawStart.getFullYear(), rawStart.getMonth(), rawStart.getDate() - 1), $lt: new Date(rawEnd.getFullYear(), rawEnd.getMonth(), rawEnd.getDate() + 1) } };
       if (employeeId) query.deviceUserId = employeeId;
-      const [records, nameMap] = await Promise.all([
+      const [records, storedEmployees, attendanceIds] = await Promise.all([
         Attendance.find(query).sort({ recordTime: -1 }).limit(100000).lean(),
-        employeeNameMap(),
+        Employee.find().sort({ deviceUserId: 1 }).lean(),
+        Attendance.distinct('deviceUserId'),
       ]);
+      const employeeDirectory = completeEmployeeList(storedEmployees, attendanceIds);
+      const nameMap = new Map(employeeDirectory.map((entry) => [entry.deviceUserId, entry.name]));
       const contextRecords = withNames(records, nameMap);
       const namedRecords = contextRecords.filter((record) => new Date(record.recordTime) >= rawStart && new Date(record.recordTime) < rawEnd);
       const selectedEmployee = employeeId && employeeId !== '__NOT_FOUND__'
@@ -618,7 +667,7 @@ const server = http.createServer(async (req, res) => {
         from: fromText,
         to: toText,
         count: namedRecords.length,
-        summaries: buildRangeSummary(contextRecords, fromText, toText, selectedEmployee),
+        summaries: buildRangeSummary(contextRecords, fromText, toText, selectedEmployee, employeeDirectory),
         records: namedRecords,
       });
     }
