@@ -1,3 +1,4 @@
+require('../src/timezone');
 const fs = require('fs');
 const path = require('path');
 const { parseDump } = require('../src/importDump');

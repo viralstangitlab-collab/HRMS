@@ -1,3 +1,4 @@
+require('./src/timezone');
 require('dotenv').config();
 const { connectDB } = require('./src/db');
 const { syncOnce } = require('./src/sync');

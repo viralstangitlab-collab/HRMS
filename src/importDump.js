@@ -4,6 +4,7 @@
 //
 // Usage: node src/importDump.js <path-to-dump-file>
 
+require('./timezone');
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
