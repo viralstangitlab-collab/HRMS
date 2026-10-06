@@ -166,46 +166,27 @@ function buildDailyReport(records, dayEnd) {
   }
   return [...byUser.entries()].map(([deviceUserId, punches]) => {
     punches.sort((a, b) => new Date(a.recordTime) - new Date(b.recordTime));
-    let insideMs = 0;
-    let unmatchedOuts = 0;
-    const sessions = [];
-    const runs = [];
-    for (const punch of punches) {
-      if (!['IN', 'OUT'].includes(punch.punchType)) continue;
-      const lastRun = runs[runs.length - 1];
-      if (!lastRun || lastRun.type !== punch.punchType) runs.push({ type: punch.punchType, punches: [punch] });
-      else lastRun.punches.push(punch);
-    }
-    for (let index = 0; index < runs.length; index += 1) {
-      const run = runs[index];
-      if (run.type === 'OUT') {
-        if (index === 0 || runs[index - 1].type !== 'IN') unmatchedOuts += run.punches.length;
-        continue;
-      }
-      const outRun = runs[index + 1];
-      if (!outRun || outRun.type !== 'OUT') continue;
-      const inPunch = run.punches[0];
-      // Multiple scans on the OUT machine before the next IN are one exit run;
-      // the final OUT is the employee's actual last exit for that session.
-      const outPunch = outRun.punches[outRun.punches.length - 1];
-      const durationMs = Math.max(0, new Date(outPunch.recordTime) - new Date(inPunch.recordTime));
-      insideMs += durationMs;
-      sessions.push({ in: inPunch.recordTime, out: outPunch.recordTime, durationMs });
-    }
-    const openIn = runs[runs.length - 1]?.type === 'IN' ? runs[runs.length - 1].punches[0] : null;
-    const firstInPunch = punches.find((p) => p.punchType === 'IN') || null;
-    // Never show an OUT that occurred before the employee's IN as "Last Out".
-    // Only a successfully matched session may contribute the displayed OUT.
-    const lastMatchedSession = sessions[sessions.length - 1] || null;
+    // Total time = the day's first IN (1515) to the last OUT (1516) after it.
+    // Intermediate IN/OUT scans (breaks, re-entries) are ignored on purpose.
+    const ins = punches.filter((p) => p.punchType === 'IN');
+    const firstInPunch = ins[0] || null;
+    const lastOutPunch = firstInPunch
+      ? [...punches].reverse().find((p) => p.punchType === 'OUT' && new Date(p.recordTime) > new Date(firstInPunch.recordTime)) || null
+      : null;
+    const insideMs = lastOutPunch ? new Date(lastOutPunch.recordTime) - new Date(firstInPunch.recordTime) : 0;
+    const sessions = lastOutPunch
+      ? [{ in: firstInPunch.recordTime, out: lastOutPunch.recordTime, durationMs: insideMs }]
+      : [];
     const lastPunch = punches[punches.length - 1];
     return {
       deviceUserId,
       employeeName: punches[0].employeeName || null,
       firstIn: firstInPunch?.recordTime || null,
-      lastOut: lastMatchedSession?.out || null,
+      lastOut: lastOutPunch?.recordTime || null,
       insideMs,
-      isComplete: sessions.length > 0 && !openIn,
-      hasIncompletePunch: Boolean(openIn || unmatchedOuts),
+      isComplete: Boolean(lastOutPunch),
+      // Incomplete only when the day has no IN, or no OUT after the first IN.
+      hasIncompletePunch: !lastOutPunch,
       currentStatus: lastPunch.punchType === 'IN' ? 'INSIDE' : 'OUTSIDE',
       punchCount: punches.length,
       sessions,
