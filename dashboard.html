@@ -135,7 +135,7 @@ body[data-sky="morning"] .welcome-hero{background:linear-gradient(160deg,#fff 15
 <div class="tablebox"><table><thead><tr><th>Date</th><th>Employee / Enrollment ID</th><th>First In</th><th>Last Out</th><th>Total Time Inside</th><th>First In → Last Out</th><th>Attendance</th></tr></thead><tbody id="summaryRows"></tbody></table></div>
 <h2>Attendance Register</h2>
 <div class="tablebox"><table><thead id="matrixHead"></thead><tbody id="matrixRows"></tbody></table></div>
-<div class="note"><b>Night-shift rule:</b> When an afternoon or night shift crosses midnight, the next day's OUT is counted against the shift's start date. The daily total is the time from the first 1515 IN to the last 1516 OUT (intermediate IN/OUT scans are not counted); days without a punch are shown as ABSENT.</div>
+<div class="note"><b>Night-shift rule:</b> When an afternoon or night shift crosses midnight, the next day's OUT is counted against the shift's start date. The daily total is the time from the first 1515 IN to the last 1516 OUT, minus every break spent outside between an OUT and the next IN; days without a punch are shown as ABSENT.</div>
 </section>
 
 <section class="app-page" data-page="punches"><h1>Punch Ledger</h1><div class="muted">Raw IN/OUT punches with machine and verification evidence.</div><div class="filters"><label>From <input id="punchFrom" type="date"></label><label>To <input id="punchTo" type="date"></label><label>Employee <select id="punchEmployee"><option value="">All employees</option></select></label><button onclick="loadPunchPage()">Show punches</button><button class="secondary" onclick="downloadPunchCsv()">Download Raw Punch CSV</button></div>
@@ -235,7 +235,7 @@ async function load(){
     byId('outside').textContent=r.totals.outsideNow;
     byId('punches').textContent=r.totals.punches;
     byId('rows').innerHTML=r.employees.length?r.employees.map((e,i)=>
-      '<tr class="clickable" onclick="toggle(\'d'+i+'\')"><td>'+nameCell(e.employeeName,e.deviceUserId)+'</td><td>'+time(e.firstIn)+'</td><td>'+time(e.lastOut)+'</td><td class="'+(e.sessions.length?'good':'warn')+'">'+duration(e.insideMs)+'</td><td>'+(e.hasIncompletePunch?'Missing IN or OUT':'First IN → Last OUT')+'</td><td><span class="pill '+e.currentStatus+'">'+e.currentStatus+'</span></td><td>'+e.punchCount+' &#9662;</td></tr>'+
+      '<tr class="clickable" onclick="toggle(\'d'+i+'\')"><td>'+nameCell(e.employeeName,e.deviceUserId)+'</td><td>'+time(e.firstIn)+'</td><td>'+time(e.lastOut)+'</td><td class="'+(e.sessions.length?'good':'warn')+'">'+duration(e.insideMs)+'</td><td>'+(e.hasIncompletePunch?'Missing IN or OUT':'Span '+duration(e.spanMs)+(e.breakMs?' · Break −'+duration(e.breakMs)+' ('+(e.breaks||[]).length+'x)':''))+'</td><td><span class="pill '+e.currentStatus+'">'+e.currentStatus+'</span></td><td>'+e.punchCount+' &#9662;</td></tr>'+
       '<tr class="details" id="d'+i+'"><td colspan="7"><div class="timeline">'+e.punches.map(p=>'<span class="event"><b>'+esc(p.punchType)+'</b> '+time(p.recordTime)+' &middot; '+esc(method(p))+'</span>').join('')+'</div></td></tr>'
     ).join(''):'<tr><td colspan="7" class="empty">No data found for this date.</td></tr>';
     const ds=Object.values(s.devices),online=ds.filter(x=>x.online).length,el=byId('status');
@@ -255,7 +255,7 @@ async function loadHistory(){
   byId('rangeDays').textContent=matrix.dates.length;byId('presentDays').textContent=present;byId('absentDays').textContent=absent;byId('rangeHours').textContent=duration(totalMs);
   byId('historyCount').textContent='Total '+historyData.length+' records';
   byId('summaryRows').innerHTML=summaries.length?summaries.map(e=>
-    '<tr><td>'+esc(e.date)+'</td><td>'+nameCell(e.employeeName,e.deviceUserId)+'</td><td>'+time(e.firstIn)+'</td><td>'+time(e.lastOut)+'</td><td class="'+(e.absent?'warn':'good')+'">'+(e.absent?'0h 0m':duration(e.insideMs))+'</td><td>'+(e.absent?'—':(e.sessions||[]).map(s=>time(s.in)+' → '+time(s.out)+' ('+duration(s.durationMs)+')').join('<br>')||'Missing IN or OUT')+'</td><td><span class="pill '+(e.absent?'ABSENT':e.hasIncompletePunch?'INSIDE':'OUTSIDE')+'">'+(e.absent?'ABSENT':e.hasIncompletePunch?'INCOMPLETE':'PRESENT')+'</span></td></tr>'
+    '<tr><td>'+esc(e.date)+'</td><td>'+nameCell(e.employeeName,e.deviceUserId)+'</td><td>'+time(e.firstIn)+'</td><td>'+time(e.lastOut)+'</td><td class="'+(e.absent?'warn':'good')+'">'+(e.absent?'0h 0m':duration(e.insideMs))+'</td><td>'+(e.absent?'—':e.spanMs?time(e.firstIn)+' → '+time(e.lastOut)+' ('+duration(e.spanMs)+')'+(e.breakMs?'<br><span class="muted">Break: −'+duration(e.breakMs)+' ('+(e.breaks||[]).length+'x)</span>':''):'Missing IN or OUT')+'</td><td><span class="pill '+(e.absent?'ABSENT':e.hasIncompletePunch?'INSIDE':'OUTSIDE')+'">'+(e.absent?'ABSENT':e.hasIncompletePunch?'INCOMPLETE':'PRESENT')+'</span></td></tr>'
   ).join(''):'<tr><td colspan="7" class="empty">Select an employee name/ID and date range, then search.</td></tr>';
   byId('historyRows').innerHTML=historyData.length?historyData.map(p=>{
     const d=new Date(p.recordTime);

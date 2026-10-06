@@ -166,17 +166,40 @@ function buildDailyReport(records, dayEnd) {
   }
   return [...byUser.entries()].map(([deviceUserId, punches]) => {
     punches.sort((a, b) => new Date(a.recordTime) - new Date(b.recordTime));
-    // Total time = the day's first IN (1515) to the last OUT (1516) after it.
-    // Intermediate IN/OUT scans (breaks, re-entries) are ignored on purpose.
-    const ins = punches.filter((p) => p.punchType === 'IN');
-    const firstInPunch = ins[0] || null;
+    // The working window runs from the day's first IN (1515) to the last OUT
+    // (1516) after it. Time spent outside between an OUT and the next IN is a
+    // break and is deducted, so insideMs is the real time spent inside.
+    // Repeated scans on the same machine collapse: the first IN of an IN run
+    // and the last OUT of an OUT run are the actual entry and exit.
+    const firstInPunch = punches.find((p) => p.punchType === 'IN') || null;
     const lastOutPunch = firstInPunch
       ? [...punches].reverse().find((p) => p.punchType === 'OUT' && new Date(p.recordTime) > new Date(firstInPunch.recordTime)) || null
       : null;
-    const insideMs = lastOutPunch ? new Date(lastOutPunch.recordTime) - new Date(firstInPunch.recordTime) : 0;
-    const sessions = lastOutPunch
-      ? [{ in: firstInPunch.recordTime, out: lastOutPunch.recordTime, durationMs: insideMs }]
-      : [];
+    const sessions = [];
+    const breaks = [];
+    if (lastOutPunch) {
+      const windowStart = new Date(firstInPunch.recordTime);
+      const windowEnd = new Date(lastOutPunch.recordTime);
+      const runs = [];
+      for (const punch of punches) {
+        const t = new Date(punch.recordTime);
+        if (!['IN', 'OUT'].includes(punch.punchType) || t < windowStart || t > windowEnd) continue;
+        const lastRun = runs[runs.length - 1];
+        if (!lastRun || lastRun.type !== punch.punchType) runs.push({ type: punch.punchType, punches: [punch] });
+        else lastRun.punches.push(punch);
+      }
+      // runs alternate IN, OUT, IN, OUT ... and always start with IN and end with OUT
+      for (let index = 0; index + 1 < runs.length; index += 2) {
+        const entry = runs[index].punches[0].recordTime;
+        const exit = runs[index + 1].punches[runs[index + 1].punches.length - 1].recordTime;
+        sessions.push({ in: entry, out: exit, durationMs: new Date(exit) - new Date(entry) });
+        const nextIn = runs[index + 2]?.punches[0].recordTime;
+        if (nextIn) breaks.push({ out: exit, in: nextIn, durationMs: new Date(nextIn) - new Date(exit) });
+      }
+    }
+    const spanMs = lastOutPunch ? new Date(lastOutPunch.recordTime) - new Date(firstInPunch.recordTime) : 0;
+    const breakMs = breaks.reduce((sum, item) => sum + item.durationMs, 0);
+    const insideMs = spanMs - breakMs;
     const lastPunch = punches[punches.length - 1];
     return {
       deviceUserId,
@@ -184,6 +207,9 @@ function buildDailyReport(records, dayEnd) {
       firstIn: firstInPunch?.recordTime || null,
       lastOut: lastOutPunch?.recordTime || null,
       insideMs,
+      spanMs,
+      breakMs,
+      breaks,
       isComplete: Boolean(lastOutPunch),
       // Incomplete only when the day has no IN, or no OUT after the first IN.
       hasIncompletePunch: !lastOutPunch,
