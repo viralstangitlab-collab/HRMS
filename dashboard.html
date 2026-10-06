@@ -87,6 +87,12 @@ body[data-sky="morning"] .welcome-hero{background:linear-gradient(160deg,#fff 15
 .tl .gap{padding:2px 0 6px 18px;color:#b56a05;font-size:12px;font-weight:600}
 .tl .gap.inside{color:#168f62}
 @media(max-width:700px){.daystats{grid-template-columns:repeat(2,1fr)}}
+
+.smallbtn.leave{background:#fff4e5;color:#b56a05;border:1px solid #f5d9a8}.smallbtn.leave:hover{background:#ffe9c7}
+.smallbtn.rejoin{background:#e3f9ee;color:#168f62;border:1px solid #b7ebd0}.smallbtn.rejoin:hover{background:#c9f2dd}
+.leftbox{margin-top:26px}.leftbox h2{display:flex;align-items:center;gap:10px}
+.leftbox .count{font-size:13px;font-weight:650;background:#f1f3f7;color:#667085;border-radius:999px;padding:2px 10px}
+.statusleft{color:#b56a05;font-weight:650}
 </style></head><body>
 
 <aside class="sidebar" id="appSidebar"><div class="sidebrand">AttendCRM<small>WORKFORCE CONTROL</small></div><a class="navitem" data-nav="overview" href="/overview"><span>◫</span>Overview</a><a class="navitem" data-nav="attendance" href="/attendance"><span>⌕</span>Attendance Reports</a><a class="navitem" data-nav="punches" href="/punches"><span>↔</span>Punch Ledger</a><a class="navitem" data-nav="profiles" href="/profiles"><span>▣</span>Employee Profiles</a><a class="navitem" data-nav="employees" href="/employees"><span>♙</span>Employee Management</a><a class="navitem" data-nav="salary" href="/salary"><span>₹</span>Salary Management</a><a class="navitem" data-nav="monthly-attendance" href="/monthly-attendance"><span>◔</span>Monthly Attendance</a></aside><div class="drawer-backdrop" id="drawerBackdrop"></div>
@@ -148,6 +154,8 @@ body[data-sky="morning"] .welcome-hero{background:linear-gradient(160deg,#fff 15
   <button onclick="saveEmployee()">Add / Update</button>
 </div>
 <div class="tablebox"><table><thead><tr><th>Device ID</th><th>Name</th><th>Role</th><th>Phone</th><th>Department</th><th>Status</th><th>Action</th></tr></thead><tbody id="empRows"></tbody></table></div>
+<div class="leftbox"><h2>Left Company <span class="count" id="leftCount">0</span></h2><div class="muted">These employees are hidden from overview, attendance, punches, history, monthly reports, salary and profiles. Their punches are kept safely in the database &mdash; click Rejoin to show everything again.</div>
+<div class="tablebox" style="margin-top:12px"><table><thead><tr><th>Device ID</th><th>Name</th><th>Department</th><th>Left On</th><th>Action</th></tr></thead><tbody id="leftRows"></tbody></table></div></div>
 </section>
 
 <section class="app-page" data-page="attendance"><section class="panel searchhero" id="employeeSearch"><h1 style="color:#fff">Attendance Reports</h1>
@@ -225,7 +233,7 @@ const modeCode=p=>String(p&&p.raw?(p.raw.verificationMode??p.raw.mode??''):'').t
 const method=p=>{const code=modeCode(p),labels={'1':'Fingerprint','3':'Password / PIN','15':'Face','30':'Face'};return code?(labels[code]||'Device verification')+' / Mode '+code:'Not supplied'};
 const faceEvidence=p=>{const code=modeCode(p),photo=p&&p.raw&&p.raw.photo;return photo?'Face snapshot received':(code==='15'||code==='30')?'Face verified / No snapshot':'—'};
 const nameCell=(name,id)=>'<span class="name">'+esc(name||id)+'</span>'+(name?'<span class="subid">#'+esc(id)+'</span>':'');
-let historyData=[],historySummaries=[],employeesData=[],editingEmployeeId=null,viewedEmployee=null,revealSensitive=false,departments=[],employeeRoles=[];
+let historyData=[],historySummaries=[],employeesData=[],leftEmployeesData=[],editingEmployeeId=null,viewedEmployee=null,revealSensitive=false,departments=[],employeeRoles=[];
 const currentPage=location.pathname==='/'?'overview':location.pathname.slice(1);
 document.querySelectorAll('.app-page').forEach(el=>el.classList.toggle('active',el.dataset.page===currentPage));
 document.querySelectorAll('[data-nav]').forEach(el=>el.classList.toggle('active',el.dataset.nav===currentPage));
@@ -390,10 +398,30 @@ async function loadEmployees(){
   const unnamed=r.unnamedIds||[];
   byId('unnamedId').innerHTML='<option value="">Unnamed IDs ('+unnamed.length+')</option>'+unnamed.map(id=>'<option value="'+esc(id)+'">'+esc(id)+'</option>').join('');
   byId('empRows').innerHTML=employees.length?employees.map(e=>
-    '<tr><td>'+esc(e.deviceUserId)+'</td><td class="name">'+esc(e.name)+'</td><td>'+esc(e.role||'Employee')+'</td><td>'+esc(e.phone||'—')+'</td><td>'+esc(e.department||'—')+'</td><td>'+(e.active?'Active':'Inactive')+'</td><td>'+(e.placeholder?'<button class="smallbtn" onclick="byId(\'unnamedId\').value=\''+esc(e.deviceUserId)+'\';byId(\'empId\').value=\''+esc(e.deviceUserId)+'\';byId(\'empName\').focus()">Add Name</button>':'<button class="smallbtn secondary" onclick="openEmployee(\''+e._id+'\')">Edit Full Profile</button> <button class="smallbtn danger" onclick="deleteEmployee(\''+e._id+'\')">Delete</button>')+'</td></tr>'
+    '<tr><td>'+esc(e.deviceUserId)+'</td><td class="name">'+esc(e.name)+'</td><td>'+esc(e.role||'Employee')+'</td><td>'+esc(e.phone||'—')+'</td><td>'+esc(e.department||'—')+'</td><td>'+(e.active?'Active':'Inactive')+'</td><td>'+(e.placeholder?'<button class="smallbtn" onclick="byId(\'unnamedId\').value=\''+esc(e.deviceUserId)+'\';byId(\'empId\').value=\''+esc(e.deviceUserId)+'\';byId(\'empName\').focus()">Add Name</button>':'<button class="smallbtn secondary" onclick="openEmployee(\''+e._id+'\')">Edit Full Profile</button> <button class="smallbtn leave" onclick="markLeftCompany(\''+e._id+'\')">Left Company</button> <button class="smallbtn danger" onclick="deleteEmployee(\''+e._id+'\')">Delete</button>')+'</td></tr>'
   ).join(''):'<tr><td colspan="7" class="empty">No employees added yet.</td></tr>';
   byId('salaryRows').innerHTML=employees.length?employees.map(e=>'<tr><td>'+nameCell(e.name,e.deviceUserId)+'</td><td>'+esc(e.department||'—')+'</td><td>'+esc(e.designation||'—')+'</td><td>₹ '+Number(e.monthlySalary||0).toLocaleString('en-IN')+'</td><td>'+esc(e.salaryEffectiveFrom||'—')+'</td><td>'+(e.placeholder?'Add employee name first':'<button class="smallbtn" onclick="openEmployee(\''+e._id+'\')">Edit Salary</button>')+'</td></tr>').join(''):'<tr><td colspan="6" class="empty">No employees.</td></tr>';
+  const left=r.leftEmployees||[];leftEmployeesData=left;
+  byId('leftCount').textContent=left.length;
+  byId('leftRows').innerHTML=left.length?left.map(e=>'<tr><td>'+esc(e.deviceUserId)+'</td><td class="name">'+esc(e.name)+'</td><td>'+esc(e.department||'—')+'</td><td class="statusleft">'+esc(e.leftOn||'—')+'</td><td><button class="smallbtn rejoin" onclick="rejoinCompany(\''+e._id+'\')">Rejoin</button></td></tr>').join(''):'<tr><td colspan="5" class="empty">No one has left the company.</td></tr>';
   renderProfiles();
+}
+async function refreshAfterStatusChange(){await Promise.all([loadEmployees(),loadDashboard(),load(),loadHistory(),loadMonthlySummary()])}
+async function markLeftCompany(id){
+  const e=employeesData.find(x=>x._id===id);if(!e)return;
+  const leftOn=prompt('Mark '+e.name+' (#'+e.deviceUserId+') as LEFT COMPANY?\n\nTheir attendance will be hidden everywhere, but nothing is deleted. You can Rejoin anytime.\n\nLeaving date (YYYY-MM-DD):',dateText());
+  if(leftOn===null)return;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(leftOn.trim()))return alert('Please enter the date as YYYY-MM-DD');
+  const r=await fetch('/api/employees/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({leftCompany:true,leftOn:leftOn.trim()})});
+  if(!r.ok)return alert((await r.json()).error||'Could not update employee');
+  await refreshAfterStatusChange();
+}
+async function rejoinCompany(id){
+  const e=leftEmployeesData.find(x=>x._id===id);if(!e)return;
+  if(!confirm('Rejoin '+e.name+' (#'+e.deviceUserId+')? All their attendance will show again.'))return;
+  const r=await fetch('/api/employees/'+id,{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({leftCompany:false,leftOn:''})});
+  if(!r.ok)return alert((await r.json()).error||'Could not update employee');
+  await refreshAfterStatusChange();
 }
 async function saveEmployee(){
   const deviceUserId=byId('empId').value.trim(),name=byId('empName').value.trim();

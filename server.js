@@ -17,7 +17,7 @@ const port = Number(process.env.PORT || process.env.APP_PORT || 3001);
 const intervalMs = Number(process.env.SYNC_INTERVAL_MS || 15000);
 const departments = ['Viralstan', 'Vitoxyz', 'Transvera', 'RevnoRCM', 'Elitesbook'];
 const employeeRoles = ['Employee', 'Manager', 'Board Member'];
-const employeeFields = ['name', 'firstName', 'middleName', 'lastName', 'phone', 'alternatePhone', 'department', 'role', 'employeeCode', 'joiningDate', 'dateOfBirth', 'gender', 'employmentType', 'alias', 'workEmail', 'personalEmail', 'pan', 'maritalStatus', 'bloodGroup', 'fatherName', 'motherName', 'bankAccount', 'ifsc', 'accountType', 'bankName', 'bankBranch', 'accountHolder', 'aadhaar', 'aadhaarName', 'emergencyContactName', 'emergencyPhone', 'nationality', 'designation', 'location', 'team', 'shift', 'monthlySalary', 'salaryEffectiveFrom', 'salaryNotes', 'active'];
+const employeeFields = ['name', 'firstName', 'middleName', 'lastName', 'phone', 'alternatePhone', 'department', 'role', 'employeeCode', 'joiningDate', 'dateOfBirth', 'gender', 'employmentType', 'alias', 'workEmail', 'personalEmail', 'pan', 'maritalStatus', 'bloodGroup', 'fatherName', 'motherName', 'bankAccount', 'ifsc', 'accountType', 'bankName', 'bankBranch', 'accountHolder', 'aadhaar', 'aadhaarName', 'emergencyContactName', 'emergencyPhone', 'nationality', 'designation', 'location', 'team', 'shift', 'monthlySalary', 'salaryEffectiveFrom', 'salaryNotes', 'active', 'leftCompany', 'leftOn'];
 const loginEmail = String(process.env.LOGIN_EMAIL || '').trim().toLowerCase();
 const loginPassword = String(process.env.LOGIN_PASSWORD || '');
 const sessionTtlMs = Number(process.env.SESSION_TTL_MS || 12 * 60 * 60 * 1000);
@@ -121,6 +121,22 @@ function withNames(records, nameMap) {
     return { ...record, deviceUserId, employeeName: nameMap.get(deviceUserId) || null };
   });
 }
+
+// Enrollment IDs (padded and unpadded) of employees marked "Left Company".
+async function leftEmployeeIds() {
+  const rows = await Employee.find({ leftCompany: true }, { deviceUserId: 1 }).lean();
+  return rows.flatMap((row) => {
+    const id = normalizeEnrollmentId(row.deviceUserId);
+    return /^\d+$/.test(id) ? [id, String(Number(id))] : [id];
+  });
+}
+
+// Adds "not a left employee" to an Attendance filter.
+function withoutLeft(query, leftIds) {
+  return leftIds.length ? { $and: [query, { deviceUserId: { $nin: leftIds } }] } : query;
+}
+
+const currentEmployeesFilter = { leftCompany: { $ne: true } };
 
 function completeEmployeeList(employees, attendanceIds) {
   const byId = new Map(employees.map((employee) => [employee.deviceUserId, employee]));
@@ -353,17 +369,20 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/status') return json(res, 200, syncStatus);
     if (req.method === 'GET' && url.pathname === '/api/dashboard') {
+      const leftIds = await leftEmployeeIds();
+      const visible = withoutLeft({}, leftIds);
       const [totalRecords, inRecords, outRecords, range, attendanceIds, employees, faceRecords, fingerprintRecords, recent, dailyTrend] = await Promise.all([
-        Attendance.countDocuments(),
-        Attendance.countDocuments({ punchType: 'IN' }),
-        Attendance.countDocuments({ punchType: 'OUT' }),
-        Attendance.aggregate([{ $group: { _id: null, first: { $min: '$recordTime' }, last: { $max: '$recordTime' } } }]),
-        Attendance.distinct('deviceUserId'),
-        Employee.find({}, { deviceUserId: 1, name: 1 }).lean(),
-        Attendance.countDocuments({ $or: [{ 'raw.mode': { $in: ['15', '30'] } }, { 'raw.verificationMode': { $in: ['15', '30'] } }] }),
-        Attendance.countDocuments({ $or: [{ 'raw.mode': '1' }, { 'raw.verificationMode': '1' }] }),
-        Attendance.find().sort({ recordTime: -1 }).limit(12).lean(),
+        Attendance.countDocuments(visible),
+        Attendance.countDocuments(withoutLeft({ punchType: 'IN' }, leftIds)),
+        Attendance.countDocuments(withoutLeft({ punchType: 'OUT' }, leftIds)),
+        Attendance.aggregate([{ $match: visible }, { $group: { _id: null, first: { $min: '$recordTime' }, last: { $max: '$recordTime' } } }]),
+        Attendance.distinct('deviceUserId', visible),
+        Employee.find(currentEmployeesFilter, { deviceUserId: 1, name: 1 }).lean(),
+        Attendance.countDocuments(withoutLeft({ $or: [{ 'raw.mode': { $in: ['15', '30'] } }, { 'raw.verificationMode': { $in: ['15', '30'] } }] }, leftIds)),
+        Attendance.countDocuments(withoutLeft({ $or: [{ 'raw.mode': '1' }, { 'raw.verificationMode': '1' }] }, leftIds)),
+        Attendance.find(visible).sort({ recordTime: -1 }).limit(12).lean(),
         Attendance.aggregate([
+          { $match: visible },
           { $group: {
             _id: { $dateToString: { date: '$recordTime', format: '%Y-%m-%d', timezone: '+05:30' } },
             punches: { $sum: 1 },
@@ -397,31 +416,35 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/attendance') {
       const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 100, 1), 1000);
+      const leftIds = await leftEmployeeIds();
       const [records, nameMap] = await Promise.all([
-        Attendance.find().sort({ recordTime: -1 }).limit(limit).lean(),
+        Attendance.find(withoutLeft({}, leftIds)).sort({ recordTime: -1 }).limit(limit).lean(),
         employeeNameMap(),
       ]);
       return json(res, 200, { records: withNames(records, nameMap) });
     }
     if (req.method === 'GET' && url.pathname === '/api/employees') {
-      const [employees, attendanceIds] = await Promise.all([
-        Employee.find().sort({ deviceUserId: 1 }).lean(),
-        Attendance.distinct('deviceUserId'),
+      const leftIds = await leftEmployeeIds();
+      const [employees, attendanceIds, leftEmployees] = await Promise.all([
+        Employee.find(currentEmployeesFilter).sort({ deviceUserId: 1 }).lean(),
+        Attendance.distinct('deviceUserId', withoutLeft({}, leftIds)),
+        Employee.find({ leftCompany: true }).sort({ deviceUserId: 1 }).lean(),
       ]);
       const namedIds = new Set(employees.filter((employee) => employee.name?.trim()).map((employee) => normalizeEnrollmentId(employee.deviceUserId)));
       const unnamedIds = [...new Set(attendanceIds.map(normalizeEnrollmentId))]
         .filter((id) => !namedIds.has(id))
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-      return json(res, 200, { employees: completeEmployeeList(employees, attendanceIds), unnamedIds, departments, employeeRoles });
+      return json(res, 200, { employees: completeEmployeeList(employees, attendanceIds), leftEmployees, unnamedIds, departments, employeeRoles });
     }
     if (req.method === 'GET' && url.pathname === '/api/monthly-summary') {
       const monthStr = url.searchParams.get('month') || localDateKey(new Date()).slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(monthStr)) return json(res, 400, { error: 'Invalid month' });
       const { start, end, days, year, month } = monthRangeLocal(monthStr);
+      const leftIds = await leftEmployeeIds();
       const [records, storedEmployees, attendanceIds] = await Promise.all([
-        Attendance.find({ recordTime: { $gte: new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1), $lt: new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1) } }).sort({ recordTime: 1 }).lean(),
-        Employee.find().sort({ deviceUserId: 1 }).lean(),
-        Attendance.distinct('deviceUserId'),
+        Attendance.find(withoutLeft({ recordTime: { $gte: new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1), $lt: new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1) } }, leftIds)).sort({ recordTime: 1 }).lean(),
+        Employee.find(currentEmployeesFilter).sort({ deviceUserId: 1 }).lean(),
+        Attendance.distinct('deviceUserId', withoutLeft({}, leftIds)),
       ]);
       const employees = completeEmployeeList(storedEmployees, attendanceIds);
       const nameMap = new Map(employees.map((employee) => [employee.deviceUserId, employee.name]));
@@ -481,6 +504,7 @@ const server = http.createServer(async (req, res) => {
         deviceUserId, name: `Unnamed #${Number(deviceUserId)}`, placeholder: true,
       } : null);
       if (!employee) return json(res, 404, { error: 'Employee not found' });
+      if (employee.leftCompany) return json(res, 404, { error: 'Employee has left the company' });
       const byDate = attendanceDateGroups(withNames(records, new Map([[deviceUserId, employee.name]])));
       const now = new Date();
       const todayKey = localDateKey(now);
@@ -548,10 +572,11 @@ const server = http.createServer(async (req, res) => {
       const employeeId = await resolveEnrollmentId(employee);
       const reportQuery = { recordTime: { $gte: contextStart, $lt: contextEnd } };
       if (employeeId) reportQuery.deviceUserId = employeeId;
+      const leftIds = await leftEmployeeIds();
       const [records, storedEmployees, allAttendanceIds] = await Promise.all([
-        Attendance.find(reportQuery).sort({ recordTime: 1 }).lean(),
-        Employee.find().sort({ deviceUserId: 1 }).lean(),
-        Attendance.distinct('deviceUserId'),
+        Attendance.find(withoutLeft(reportQuery, leftIds)).sort({ recordTime: 1 }).lean(),
+        Employee.find(currentEmployeesFilter).sort({ deviceUserId: 1 }).lean(),
+        Attendance.distinct('deviceUserId', withoutLeft({}, leftIds)),
       ]);
       const directory = completeEmployeeList(storedEmployees, allAttendanceIds);
       const nameMap = new Map(directory.map((entry) => [entry.deviceUserId, entry.name]));
@@ -602,16 +627,17 @@ const server = http.createServer(async (req, res) => {
       const rawEnd = localDate(toText, true);
       const query = { recordTime: { $gte: new Date(rawStart.getFullYear(), rawStart.getMonth(), rawStart.getDate() - 1), $lt: new Date(rawEnd.getFullYear(), rawEnd.getMonth(), rawEnd.getDate() + 1) } };
       if (employeeId) query.deviceUserId = employeeId;
+      const leftIds = await leftEmployeeIds();
       const [records, storedEmployees, attendanceIds] = await Promise.all([
-        Attendance.find(query).sort({ recordTime: -1 }).limit(100000).lean(),
-        Employee.find().sort({ deviceUserId: 1 }).lean(),
-        Attendance.distinct('deviceUserId'),
+        Attendance.find(withoutLeft(query, leftIds)).sort({ recordTime: -1 }).limit(100000).lean(),
+        Employee.find(currentEmployeesFilter).sort({ deviceUserId: 1 }).lean(),
+        Attendance.distinct('deviceUserId', withoutLeft({}, leftIds)),
       ]);
       const employeeDirectory = completeEmployeeList(storedEmployees, attendanceIds);
       const nameMap = new Map(employeeDirectory.map((entry) => [entry.deviceUserId, entry.name]));
       const contextRecords = withNames(records, nameMap);
       const namedRecords = contextRecords.filter((record) => new Date(record.recordTime) >= rawStart && new Date(record.recordTime) < rawEnd);
-      const selectedEmployee = employeeId && employeeId !== '__NOT_FOUND__'
+      const selectedEmployee = employeeId && employeeId !== '__NOT_FOUND__' && !leftIds.includes(employeeId)
         ? { deviceUserId: employeeId, name: nameMap.get(employeeId) || null }
         : null;
       return json(res, 200, {

@@ -42,6 +42,10 @@ const employeeSchema = new mongoose.Schema({
   salaryEffectiveFrom: { type: String },
   salaryNotes: { type: String },
   active: { type: Boolean, default: true },
+  // Employees who left are hidden from every report, list and punch view.
+  // Their punches stay in the database so a rejoin restores everything.
+  leftCompany: { type: Boolean, default: false },
+  leftOn: { type: String },
 }, { timestamps: true });
 
 module.exports = mongoose.model('Employee', employeeSchema);
