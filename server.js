@@ -22,35 +22,6 @@ const loginPassword = String(process.env.LOGIN_PASSWORD || '');
 const sessionTtlMs = Number(process.env.SESSION_TTL_MS || 12 * 60 * 60 * 1000);
 const loginAttempts = new Map();
 
-const HOLIDAYS_2026 = new Map([
-  ['2026-01-01', "New Year's Day"],
-  ['2026-01-15', 'Pongal'],
-  ['2026-01-16', 'Thiruvalluvar Day/Mattu Pongal'],
-  ['2026-01-17', 'Uzhavar Thirunal'],
-  ['2026-01-26', 'Republic Day'],
-  ['2026-03-21', 'Id-Ul-Fittr'],
-  ['2026-04-03', 'Good Friday'],
-  ['2026-04-09', 'Election'],
-  ['2026-04-14', 'Dr. B R Ambedkar Jayanti/ Tamil New Year'],
-  ['2026-05-01', 'May Day'],
-  ['2026-05-28', 'Bakri ID (Id-Uz-Zuha)'],
-  ['2026-08-15', 'Independence Day'],
-  ['2026-08-26', 'Id A Milad (Milad-Un-Nabi)'],
-  ['2026-10-02', 'Mahatma Gandhi Jayanthi'],
-  ['2026-10-19', 'Saraswathi Pooja/Mahanavami'],
-  ['2026-10-20', 'Dussehra'],
-  ['2026-11-08', 'Diwali'],
-  ['2026-12-25', 'Christmas'],
-]);
-
-function nonWorkingDay(dateKey) {
-  const holidayName = HOLIDAYS_2026.get(dateKey);
-  if (holidayName) return { status: 'holiday', label: holidayName };
-  const [year, month, day] = dateKey.split('-').map(Number);
-  if (new Date(year, month - 1, day).getDay() === 0) return { status: 'sunday', label: 'Sunday' };
-  return null;
-}
-
 function passwordDigest(password, salt) {
   return crypto.scryptSync(String(password), salt, 64).toString('hex');
 }
@@ -220,13 +191,6 @@ function buildDailyReport(records, dayEnd) {
       insideMs += durationMs;
       sessions.push({ in: inPunch.recordTime, out: outPunch.recordTime, durationMs });
     }
-    // Preserve the raw biometric punches while applying the agreed reporting
-    // minimum for Abhishek Singh (#20) on regular workdays. Saturday is a
-    // 4 PM closing day, so it must always show the real punch-derived duration.
-    const isSaturday = punches.length > 0 && new Date(punches[0].recordTime).getDay() === 6;
-    if (deviceUserId === '00000020' && punches.length > 0 && !isSaturday) {
-      insideMs = Math.max(insideMs, 7.5 * 60 * 60 * 1000);
-    }
     const openIn = runs[runs.length - 1]?.type === 'IN' ? runs[runs.length - 1].punches[0] : null;
     const firstInPunch = punches.find((p) => p.punchType === 'IN') || null;
     // Never show an OUT that occurred before the employee's IN as "Last Out".
@@ -305,15 +269,10 @@ function buildRangeSummary(records, fromText, toText, selectedEmployee, employee
     const end = new Date(year, month - 1, day + 1);
     const start = new Date(year, month - 1, day);
     const effectiveEnd = now >= start && now < end ? now : end;
-    const dayOff = nonWorkingDay(date);
     return buildDailyReport(dayRecords, effectiveEnd).map((entry) => ({
       date,
       ...entry,
       punches: undefined,
-      // A holiday is still a worked day for anyone who actually punched.
-      // Keep the holiday label only for employees without attendance activity.
-      dayStatus: entry.punchCount > 0 ? null : dayOff?.status || null,
-      dayLabel: entry.punchCount > 0 ? null : dayOff?.label || null,
     }));
   });
   const employeesToFill = selectedEmployee ? [selectedEmployee] : employeeDirectory;
@@ -323,9 +282,8 @@ function buildRangeSummary(records, fromText, toText, selectedEmployee, employee
     for (let cursor = new Date(fy, fm - 1, fd), end = new Date(ty, tm - 1, td); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
       const date = localDateKey(cursor);
       const hasEmployeeEntry = result.some((entry) => entry.date === date && entry.deviceUserId === employee.deviceUserId);
-      const dayOff = nonWorkingDay(date);
-      if (!hasEmployeeEntry && (selectedEmployee || dayOff)) {
-        result.push({ date, deviceUserId: employee.deviceUserId, employeeName: employee.name, absent: !dayOff, dayStatus: dayOff?.status || null, dayLabel: dayOff?.label || null, firstIn: null, lastOut: null, insideMs: 0, punchCount: 0, sessions: [] });
+      if (!hasEmployeeEntry && selectedEmployee) {
+        result.push({ date, deviceUserId: employee.deviceUserId, employeeName: employee.name, absent: true, firstIn: null, lastOut: null, insideMs: 0, punchCount: 0, sessions: [] });
       }
     }
   }
@@ -371,7 +329,7 @@ const server = http.createServer(async (req, res) => {
       if (url.pathname.startsWith('/api/')) return json(res, 401, { error: 'Authentication required' });
       return redirect(res, '/login');
     }
-    if (req.method === 'GET' && ['/', '/overview', '/attendance', '/punches', '/employees', '/profiles', '/salary', '/monthly-attendance', '/holidays'].includes(url.pathname)) {
+    if (req.method === 'GET' && ['/', '/overview', '/attendance', '/punches', '/employees', '/profiles', '/salary', '/monthly-attendance'].includes(url.pathname)) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store, no-cache, must-revalidate' });
       return res.end(fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8'));
     }
@@ -384,13 +342,6 @@ const server = http.createServer(async (req, res) => {
       return res.end(fs.readFileSync(path.join(__dirname, 'public', 'live', fileName), 'utf8'));
     }
     if (req.method === 'GET' && url.pathname === '/api/status') return json(res, 200, syncStatus);
-    if (req.method === 'GET' && url.pathname === '/api/holidays') {
-      const holidays = [...HOLIDAYS_2026.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, name]) => {
-        const [year, month, day] = date.split('-').map(Number);
-        return { date, name, day: new Date(year, month - 1, day).toLocaleDateString('en-IN', { weekday: 'long' }) };
-      });
-      return json(res, 200, { year: 2026, holidays });
-    }
     if (req.method === 'GET' && url.pathname === '/api/dashboard') {
       const [totalRecords, inRecords, outRecords, range, attendanceIds, employees, faceRecords, fingerprintRecords, recent, dailyTrend] = await Promise.all([
         Attendance.countDocuments(),
@@ -454,7 +405,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { employees: completeEmployeeList(employees, attendanceIds), unnamedIds, departments, employeeRoles });
     }
     if (req.method === 'GET' && url.pathname === '/api/monthly-summary') {
-      const monthStr = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+      const monthStr = url.searchParams.get('month') || localDateKey(new Date()).slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(monthStr)) return json(res, 400, { error: 'Invalid month' });
       const { start, end, days, year, month } = monthRangeLocal(monthStr);
       const [records, storedEmployees, attendanceIds] = await Promise.all([
@@ -495,7 +446,6 @@ const server = http.createServer(async (req, res) => {
           else if (quality === 'red') stat.redDays += 1;
           else stat.absentDays += 1;
         }
-        if (nonWorkingDay(key)) continue;
         for (const [deviceUserId, stat] of perEmployee) {
           if (!seen.has(deviceUserId)) stat.absentDays += 1;
         }
@@ -509,7 +459,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname.startsWith('/api/monthly-summary/')) {
       const deviceUserId = decodeURIComponent(url.pathname.slice('/api/monthly-summary/'.length));
-      const monthStr = url.searchParams.get('month') || new Date().toISOString().slice(0, 7);
+      const monthStr = url.searchParams.get('month') || localDateKey(new Date()).slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(monthStr)) return json(res, 400, { error: 'Invalid month' });
       const { start, end, days, year, month } = monthRangeLocal(monthStr);
       const alternateId = /^0+\d+$/.test(deviceUserId) ? String(Number(deviceUserId)) : deviceUserId;
@@ -533,15 +483,6 @@ const server = http.createServer(async (req, res) => {
         const [entry] = buildDailyReport(byDate.get(key) || [], dayEnd);
         const minutes = entry ? Math.round(entry.insideMs / 60000) : 0;
         const punchCount = entry ? entry.punchCount : 0;
-        const dayOff = nonWorkingDay(key);
-        if (dayOff && punchCount === 0) {
-          dayList.push({
-            date: key, status: dayOff.status, dayLabel: dayOff.label, minutes, punchCount,
-            firstIn: entry?.firstIn || null, lastOut: entry?.lastOut || null,
-            sessions: entry?.sessions || [], hasIncompletePunch: entry?.hasIncompletePunch || false,
-          });
-          continue;
-        }
         const status = classifyQuality(minutes, punchCount);
         summary.totalMinutes += minutes;
         if (punchCount > 0) { summary.presentDays += 1; summary.workedDays += 1; }
@@ -584,7 +525,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true });
     }
     if (req.method === 'GET' && url.pathname === '/api/report') {
-      const requested = url.searchParams.get('date') || new Date().toISOString().slice(0, 10);
+      const requested = url.searchParams.get('date') || localDateKey(new Date());
       if (!/^\d{4}-\d{2}-\d{2}$/.test(requested)) return json(res, 400, { error: 'Invalid date' });
       const [year, month, day] = requested.split('-').map(Number);
       const start = new Date(year, month - 1, day);

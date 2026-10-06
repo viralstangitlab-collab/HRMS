@@ -19,6 +19,8 @@ const EMPLOYEE_NAME_OVERRIDES = new Map([
   ['00000045', 'Vikash'],
   ['00000046', 'Heena'],
   ['00000047', 'Affreen'],
+  ['00000048', 'Anjalica'],
+  ['00000049', 'Robin'],
 ]);
 
 function splitRow(line) {
@@ -76,8 +78,21 @@ function parseDump(filePath) {
   return { rows, employees };
 }
 
-async function importDump(filePath) {
-  const { rows, employees } = parseDump(filePath);
+async function importDump(filePath, options = {}) {
+  const parsed = parseDump(filePath);
+  const through = options.until
+    ? new Date(options.until)
+    : options.through ? new Date(`${options.through}T23:59:59.999`) : null;
+  if (through && Number.isNaN(through.getTime())) throw new Error(`Invalid import cutoff: ${options.until || options.through}`);
+
+  const selectedIds = options.employees?.length
+    ? new Set(options.employees.map((id) => String(id).padStart(8, '0')))
+    : null;
+  const rows = parsed.rows.filter((row) =>
+    (!through || row.recordTime <= through) && (!selectedIds || selectedIds.has(row.deviceUserId))
+  );
+  const employeeIds = new Set(rows.map((row) => row.deviceUserId));
+  const employees = new Map([...parsed.employees].filter(([enNo]) => employeeIds.has(enNo)));
   console.log(`[import] parsed ${rows.length} log row(s), ${employees.size} unique EnNo(s)`);
 
   if (!rows.length) {
@@ -121,12 +136,31 @@ async function importDump(filePath) {
 }
 
 if (require.main === module) {
-  const filePath = process.argv[2];
+  const args = process.argv.slice(2);
+  const filePath = args[0];
+  const throughIndex = args.indexOf('--through');
+  const through = throughIndex >= 0 ? args[throughIndex + 1] : null;
+  const untilIndex = args.indexOf('--until');
+  const until = untilIndex >= 0 ? args[untilIndex + 1] : null;
+  const employeesIndex = args.indexOf('--employees');
+  const employees = employeesIndex >= 0 ? args[employeesIndex + 1]?.split(',').filter(Boolean) : null;
   if (!filePath) {
-    console.error('Usage: node src/importDump.js <path-to-dump-file>');
+    console.error('Usage: node src/importDump.js <path-to-dump-file> [--through YYYY-MM-DD | --until ISO_DATETIME] [--employees ID,ID]');
     process.exit(1);
   }
-  importDump(path.resolve(filePath))
+  if (throughIndex >= 0 && !through) {
+    console.error('--through requires a YYYY-MM-DD value');
+    process.exit(1);
+  }
+  if (untilIndex >= 0 && !until) {
+    console.error('--until requires an ISO date-time value');
+    process.exit(1);
+  }
+  if (employeesIndex >= 0 && !employees?.length) {
+    console.error('--employees requires a comma-separated ID list');
+    process.exit(1);
+  }
+  importDump(path.resolve(filePath), { through, until, employees })
     .then(() => process.exit(0))
     .catch((err) => {
       console.error('[import] failed:', err);

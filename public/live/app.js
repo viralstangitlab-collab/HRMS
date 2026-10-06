@@ -1,6 +1,10 @@
 // ---------- helpers ----------
-function todayStr() { return new Date().toISOString().slice(0, 10); }
-function currentMonthStr() { return new Date().toISOString().slice(0, 7); }
+function todayStr() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  return new Date(now - offset * 60000).toISOString().slice(0, 10);
+}
+function currentMonthStr() { return todayStr().slice(0, 7); }
 
 function fmtTime(iso) {
   if (!iso) return '&ndash;';
@@ -204,8 +208,8 @@ async function loadEmployeeDetail(deviceUserId, month) {
       <td>${fmtTime(d.firstIn)}</td>
       <td>${fmtTime(d.lastOut)}${d.hasIncompletePunch ? ' <span class="muted">(still IN)</span>' : ''}</td>
       <td>${(d.sessions || []).length}</td>
-      <td>${d.dayLabel ? '—' : fmtHours(d.minutes)}</td>
-      <td>${statusPill(d.status, d.dayLabel)}</td>
+      <td>${fmtHours(d.minutes)}</td>
+      <td>${statusPill(d.status)}</td>
     </tr>`).join('') : emptyRow(6, 'No data for this month.');
 }
 
