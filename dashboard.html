@@ -58,6 +58,35 @@ body{background:#f5f7f8;color:#17212b}.sidebar{display:block;transform:translate
 /* animated, time-aware hero */
 .welcome-hero{isolation:isolate;transition:background 1.2s ease}.hero-time{display:inline-flex;align-items:center;gap:7px;margin-top:18px;padding:6px 10px;border:1px solid #dbe8ec;background:#ffffffb8;backdrop-filter:blur(8px);border-radius:999px;font-size:11px;color:#536979;font-weight:700}.hero-time:before{content:'';width:6px;height:6px;border-radius:50%;background:#14a695;box-shadow:0 0 0 4px #14a6951c}.sky-cloud{position:absolute;z-index:1;width:125px;height:23px;border-radius:30px;background:#dff8fcaa;filter:blur(.2px);animation:cloudDrift 24s linear infinite}.sky-cloud:before,.sky-cloud:after{content:'';position:absolute;bottom:0;border-radius:50%;background:inherit}.sky-cloud:before{left:23px;width:46px;height:38px}.sky-cloud:after{right:17px;width:54px;height:32px}.sky-cloud.c1{top:35px;left:-150px}.sky-cloud.c2{top:84px;left:-210px;transform:scale(.72);animation-duration:34s;animation-delay:-12s;opacity:.75}.sky-cloud.c3{top:21px;left:-180px;transform:scale(.5);animation-duration:43s;animation-delay:-28s;opacity:.55}@keyframes cloudDrift{to{left:110%}}.city:before{animation:sunFloat 5s ease-in-out infinite}.city b{background-color:#69d3e5;background-image:repeating-linear-gradient(90deg,transparent 0 14px,#e9fcff8c 14px 18px);background-size:32px 100%;animation:buildingBreathe 6s ease-in-out infinite alternate}.city b:nth-child(even){animation-delay:-3s}.city i{background-color:#0874b0;background-image:repeating-linear-gradient(90deg,transparent 0 15px,#9cecff55 15px 18px);background-size:30px 100%;animation:buildingBreathe 7s ease-in-out infinite alternate-reverse}.city i:nth-child(odd){animation-delay:-2s}@keyframes sunFloat{50%{transform:translateY(-8px);box-shadow:0 0 0 20px #fff5b9aa,0 0 0 36px #fffbea66}}@keyframes buildingBreathe{to{filter:brightness(1.08);transform:translateY(-3px)}}
 body[data-sky="morning"] .welcome-hero{background:linear-gradient(160deg,#fff 15%,#f1fcff 100%)}body[data-sky="afternoon"] .welcome-hero{background:linear-gradient(160deg,#fff 12%,#e9f9ff 100%)}body[data-sky="afternoon"] .city:before{background:#ffc928;box-shadow:0 0 0 18px #fff1a8,0 0 0 34px #fff7d3}body[data-sky="evening"] .welcome-hero{background:linear-gradient(145deg,#fff8f3 5%,#ffe5d9 55%,#ddedff 100%)}body[data-sky="evening"] .city:before{background:#ff9254;box-shadow:0 0 0 17px #ffd3a8aa,0 0 0 32px #ffe9ce88}body[data-sky="evening"] .city b{background-color:#6bbcd2}body[data-sky="night"] .welcome-hero{background:linear-gradient(145deg,#172a46,#254d70 58%,#426e89);color:#fff}body[data-sky="night"] .welcome-copy small,body[data-sky="night"] .welcome-copy p{color:#d8edf7}body[data-sky="night"] .city:before{background:#f8f3d6;box-shadow:inset -14px 2px 0 #d8e5ee,0 0 0 14px #eef8ff22,0 0 35px #dff5ff88}body[data-sky="night"] .sky-cloud{background:#b8d3e044;opacity:.55}body[data-sky="night"] .city b{background-color:#285d7d;background-image:repeating-linear-gradient(90deg,transparent 0 14px,#ffe887 14px 18px)}body[data-sky="night"] .city i{background-color:#123f63;background-image:repeating-linear-gradient(90deg,transparent 0 15px,#ffd968 15px 18px)}body[data-sky="night"] .hero-time{background:#102f4aaa;border-color:#6689a2;color:#eaf8ff}body[data-sky="night"] .hero-time:before{background:#ffe275;box-shadow:0 0 0 4px #ffe27522}@media(prefers-reduced-motion:reduce){.sky-cloud,.city:before,.city b,.city i{animation:none!important}}
+
+/* Attendance register: readable fixed-width day columns */
+.registerbox{max-height:70vh}
+.register th,.register td{white-space:nowrap;word-break:normal;padding:10px 8px;text-align:center;vertical-align:middle;border-bottom:1px solid #edf1f6}
+.register th{font-size:11px;line-height:1.35}
+.register th small{display:block;font-weight:600;color:#98a2b3;text-transform:none;letter-spacing:0}
+.register th.sun,.register td.sun{background:#fbf7ef}
+.register .stick{position:sticky;left:0;z-index:2;background:#fff;text-align:left;min-width:150px;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.register .stick2{position:sticky;left:150px;z-index:2;background:#fff;text-align:left;min-width:90px;color:#8490a4;font-size:12px}
+.register th.stick,.register th.stick2{z-index:3;background:#f8fafc}
+.regcell{display:inline-block;min-width:66px;padding:5px 8px;border-radius:8px;font-size:12px;font-weight:650;border:0;cursor:default;font-family:inherit}
+.regcell.ok{background:#e3f9ee;color:#168f62;cursor:pointer}.regcell.ok:hover{background:#c9f2dd}
+.regcell.inc{background:#fdecec;color:#c92a2a;cursor:pointer}.regcell.inc:hover{background:#fbd5d5}
+.regcell.abs{background:#f4f5f7;color:#98a2b3}
+/* Break chip + day detail popup */
+.breakbtn,.detailbtn{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:650;cursor:pointer;font-family:inherit}
+.breakbtn{border:1px solid #f5d9a8;background:#fff8eb;color:#b56a05}.breakbtn:hover{background:#ffefd2}
+.detailbtn{border:1px solid #d6e4ff;background:#f3f7ff;color:#2f5bd3}.detailbtn:hover{background:#e3edff}
+.daystats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+.daystat{border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px}.daystat small{display:block;color:#667085;font-size:12px}.daystat b{display:block;font-size:20px;margin:4px 0;color:#172033}
+.daystat.inside b{color:#168f62}.daystat.brk b{color:#b56a05}
+.tl{list-style:none;margin:0 0 0 8px;padding:0;border-left:2px solid #e2e8f0}
+.tl li{position:relative;padding:8px 0 8px 18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.tl li:before{content:'';position:absolute;left:-7px;top:15px;width:12px;height:12px;border-radius:50%;background:#cbd5e1}
+.tl li.in:before{background:#16a34a}.tl li.out:before{background:#dc2626}.tl li.ignored{opacity:.55}
+.tl .t{font-variant-numeric:tabular-nums;font-weight:650;min-width:100px}
+.tl .gap{padding:2px 0 6px 18px;color:#b56a05;font-size:12px;font-weight:600}
+.tl .gap.inside{color:#168f62}
+@media(max-width:700px){.daystats{grid-template-columns:repeat(2,1fr)}}
 </style></head><body>
 
 <aside class="sidebar" id="appSidebar"><div class="sidebrand">AttendCRM<small>WORKFORCE CONTROL</small></div><a class="navitem" data-nav="overview" href="/overview"><span>◫</span>Overview</a><a class="navitem" data-nav="attendance" href="/attendance"><span>⌕</span>Attendance Reports</a><a class="navitem" data-nav="punches" href="/punches"><span>↔</span>Punch Ledger</a><a class="navitem" data-nav="profiles" href="/profiles"><span>▣</span>Employee Profiles</a><a class="navitem" data-nav="employees" href="/employees"><span>♙</span>Employee Management</a><a class="navitem" data-nav="salary" href="/salary"><span>₹</span>Salary Management</a><a class="navitem" data-nav="monthly-attendance" href="/monthly-attendance"><span>◔</span>Monthly Attendance</a></aside><div class="drawer-backdrop" id="drawerBackdrop"></div>
@@ -134,7 +163,7 @@ body[data-sky="morning"] .welcome-hero{background:linear-gradient(160deg,#fff 15
 <section class="cards" id="searchCards"><div class="card"><span class="label">Selected Range Days</span><b id="rangeDays">0</b></div><div class="card in"><span class="label">Present Days</span><b id="presentDays">0</b></div><div class="card out"><span class="label">Absent Days</span><b id="absentDays">0</b></div><div class="card"><span class="label">Total Time Inside</span><b id="rangeHours">0h</b></div></section>
 <div class="tablebox"><table><thead><tr><th>Date</th><th>Employee / Enrollment ID</th><th>First In</th><th>Last Out</th><th>Total Time Inside</th><th>First In → Last Out</th><th>Attendance</th></tr></thead><tbody id="summaryRows"></tbody></table></div>
 <h2>Attendance Register</h2>
-<div class="tablebox"><table><thead id="matrixHead"></thead><tbody id="matrixRows"></tbody></table></div>
+<div class="tablebox registerbox"><table class="register"><thead id="matrixHead"></thead><tbody id="matrixRows"></tbody></table></div>
 <div class="note"><b>Night-shift rule:</b> When an afternoon or night shift crosses midnight, the next day's OUT is counted against the shift's start date. The daily total is the time from the first 1515 IN to the last 1516 OUT, minus every break spent outside between an OUT and the next IN; days without a punch are shown as ABSENT.</div>
 </section>
 
@@ -164,6 +193,7 @@ body[data-sky="morning"] .welcome-hero{background:linear-gradient(160deg,#fff 15
 </section>
 <div class="tablebox"><table><thead><tr><th>Date</th><th>First In</th><th>Last Out</th><th>Sessions</th><th>Hours Worked</th><th>Status</th></tr></thead><tbody id="qDetailRows"></tbody></table></div>
 </div></div>
+<div id="dayDetailModal" class="modal" onclick="if(event.target===this)closeDayDetail()"><div class="modalbox" style="max-width:780px"><div class="paneltitle"><h2 id="dayDetailTitle">Day Detail</h2><button class="secondary" onclick="closeDayDetail()">Close</button></div><div id="dayDetailBody"></div></div></div>
 <div id="employeeModal" class="modal"><div class="modalbox"><div class="paneltitle"><h2 id="modalTitle">Edit Employee</h2><button class="secondary" onclick="closeEmployeeModal()">Close</button></div><div id="profileFields" class="formgrid"></div><div class="modalactions"><button class="secondary" onclick="closeEmployeeModal()">Cancel</button><button onclick="saveFullEmployee()">Save Employee</button></div></div></div>
 <div id="profileModal" class="modal"><div class="modalbox"><div class="paneltitle"><h2 id="profileTitle">Employee Profile</h2><div><button id="revealSensitive" class="secondary" onclick="toggleSensitive()">Reveal sensitive data</button> <button class="secondary" onclick="closeProfile()">Close</button></div></div><div id="profileDetails" class="profilegrid"></div><div class="modalactions"><button onclick="editViewedEmployee()">Edit Profile</button></div></div></div>
 <button id="scrollTop" class="scrolltop at-top" type="button" title="Back to top" aria-label="Back to top">↑</button>
@@ -255,7 +285,7 @@ async function loadHistory(){
   byId('rangeDays').textContent=matrix.dates.length;byId('presentDays').textContent=present;byId('absentDays').textContent=absent;byId('rangeHours').textContent=duration(totalMs);
   byId('historyCount').textContent='Total '+historyData.length+' records';
   byId('summaryRows').innerHTML=summaries.length?summaries.map(e=>
-    '<tr><td>'+esc(e.date)+'</td><td>'+nameCell(e.employeeName,e.deviceUserId)+'</td><td>'+time(e.firstIn)+'</td><td>'+time(e.lastOut)+'</td><td class="'+(e.absent?'warn':'good')+'">'+(e.absent?'0h 0m':duration(e.insideMs))+'</td><td>'+(e.absent?'—':e.spanMs?time(e.firstIn)+' → '+time(e.lastOut)+' ('+duration(e.spanMs)+')'+(e.breakMs?'<br><span class="muted">Break: −'+duration(e.breakMs)+' ('+(e.breaks||[]).length+'x)</span>':''):'Missing IN or OUT')+'</td><td><span class="pill '+(e.absent?'ABSENT':e.hasIncompletePunch?'INSIDE':'OUTSIDE')+'">'+(e.absent?'ABSENT':e.hasIncompletePunch?'INCOMPLETE':'PRESENT')+'</span></td></tr>'
+    '<tr><td>'+esc(e.date)+'</td><td>'+nameCell(e.employeeName,e.deviceUserId)+'</td><td>'+time(e.firstIn)+'</td><td>'+time(e.lastOut)+'</td><td class="'+(e.absent?'warn':'good')+'">'+(e.absent?'0h 0m':duration(e.insideMs))+'</td><td>'+(e.absent?'—':e.spanMs?time(e.firstIn)+' → '+time(e.lastOut)+' ('+duration(e.spanMs)+')'+'<br>'+(e.breakMs?'<button class="breakbtn"'+' onclick="openDayDetail(\''+esc(e.deviceUserId)+'\',\''+esc(e.date)+'\')"'+'>'+'Break −'+duration(e.breakMs)+' · '+(e.breaks||[]).length+'x out · View IN/OUT'+'</button>':'<button class="detailbtn"'+' onclick="openDayDetail(\''+esc(e.deviceUserId)+'\',\''+esc(e.date)+'\')"'+'>'+'No break · View IN/OUT'+'</button>'):'Missing IN or OUT<br>'+'<button class="detailbtn"'+' onclick="openDayDetail(\''+esc(e.deviceUserId)+'\',\''+esc(e.date)+'\')"'+'>'+'View IN/OUT'+'</button>')+'</td><td><span class="pill '+(e.absent?'ABSENT':e.hasIncompletePunch?'INSIDE':'OUTSIDE')+'">'+(e.absent?'ABSENT':e.hasIncompletePunch?'INCOMPLETE':'PRESENT')+'</span></td></tr>'
   ).join(''):'<tr><td colspan="7" class="empty">Select an employee name/ID and date range, then search.</td></tr>';
   byId('historyRows').innerHTML=historyData.length?historyData.map(p=>{
     const d=new Date(p.recordTime);
@@ -296,10 +326,50 @@ function attendanceMatrix(){
   historySummaries.forEach(e=>{if(!seenIds.has(e.deviceUserId)){source.push({deviceUserId:e.deviceUserId,name:e.employeeName||e.deviceUserId});seenIds.add(e.deviceUserId)}});
   return {dates,rows:source.map(employee=>({employee,entries:dates.map(date=>summaryMap.get(employee.deviceUserId+'|'+date)||null)}))};
 }
+function registerDateHead(date){const d=new Date(date+'T00:00:00');return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})+'<small>'+d.toLocaleDateString('en-IN',{weekday:'short'})+'</small>'}
+function registerCell(entry,deviceUserId,date){
+  if(!entry||entry.absent)return '<span class="regcell abs">Absent</span>';
+  const action=' onclick="openDayDetail(\''+esc(deviceUserId)+'\',\''+esc(date)+'\')"'+' title="Click for IN/OUT details"';
+  if(!(entry.sessions||[]).length)return '<button class="regcell inc"'+action+'>Incomplete</button>';
+  return '<button class="regcell ok"'+action+'>'+workedHours(entry.insideMs)+'</button>';
+}
 function renderAttendanceMatrix(){
-  const matrix=attendanceMatrix();
-  byId('matrixHead').innerHTML='<tr><th>Employee</th><th>Enrollment ID</th>'+matrix.dates.map(date=>'<th>'+esc(date)+'</th>').join('')+'</tr>';
-  byId('matrixRows').innerHTML=matrix.rows.length?matrix.rows.map(row=>'<tr><td class="name">'+esc(row.employee.name||row.employee.deviceUserId)+'</td><td>'+esc(row.employee.deviceUserId)+'</td>'+row.entries.map(entry=>'<td class="'+(!entry||entry.absent?'warn':'good')+'">'+esc(attendanceCell(entry))+'</td>').join('')+'</tr>').join(''):'<tr><td class="empty" colspan="'+(matrix.dates.length+2)+'">No employee found.</td></tr>';
+  const matrix=attendanceMatrix(),sun=date=>new Date(date+'T00:00:00').getDay()===0?' class="sun"':'';
+  byId('matrixHead').innerHTML='<tr><th class="stick">Employee</th><th class="stick2">ID</th>'+matrix.dates.map(date=>'<th'+sun(date)+'>'+registerDateHead(date)+'</th>').join('')+'</tr>';
+  byId('matrixRows').innerHTML=matrix.rows.length?matrix.rows.map(row=>'<tr><td class="stick name" title="'+esc(row.employee.name||'')+'">'+esc(row.employee.name||row.employee.deviceUserId)+'</td><td class="stick2">#'+esc(row.employee.deviceUserId)+'</td>'+row.entries.map((entry,i)=>'<td'+sun(matrix.dates[i])+'>'+registerCell(entry,row.employee.deviceUserId,matrix.dates[i])+'</td>').join('')+'</tr>').join(''):'<tr><td class="empty" colspan="'+(matrix.dates.length+2)+'">No employee found.</td></tr>';
+}
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeDayDetail()});
+function closeDayDetail(){byId('dayDetailModal').classList.remove('open')}
+function openDayDetail(deviceUserId,date){
+  const e=historySummaries.find(x=>x.deviceUserId===deviceUserId&&x.date===date);if(!e)return;
+  const ms=v=>new Date(v).getTime(),first=e.firstIn?ms(e.firstIn):null,last=e.lastOut?ms(e.lastOut):null;
+  const entries=new Set((e.sessions||[]).map(x=>ms(x.in))),exits=new Set((e.sessions||[]).map(x=>ms(x.out)));
+  const breakAfter=new Map((e.breaks||[]).map(b=>[ms(b.out),b])),sessionAfter=new Map((e.sessions||[]).map(x=>[ms(x.in),x]));
+  const timeline=(e.timeline||[]).slice().sort((a,b)=>ms(a.time)-ms(b.time));
+  const items=timeline.map(p=>{
+    const t=ms(p.time);let note,counted=true;
+    if(last!==null&&t===first&&p.type==='IN')note='<b>First IN</b> · working time starts';
+    else if(t===last&&p.type==='OUT')note='<b>Last OUT</b> · working time ends';
+    else if(first===null||last===null||t<first||t>last){note='Outside first IN → last OUT · not counted';counted=false}
+    else if(p.type==='OUT'&&exits.has(t))note='Went out · break starts';
+    else if(p.type==='IN'&&entries.has(t))note='Came back in · break ends';
+    else{note='Repeat scan on same machine · not counted';counted=false}
+    let gap='';
+    if(counted&&p.type==='IN'&&sessionAfter.has(t))gap='<div class="gap inside">Inside for '+duration(sessionAfter.get(t).durationMs)+'</div>';
+    else if(counted&&p.type==='OUT'&&breakAfter.has(t))gap='<div class="gap">Outside for '+duration(breakAfter.get(t).durationMs)+' · deducted</div>';
+    const how=p.mode?method({raw:{mode:p.mode}}):'';
+    return '<li class="'+(p.type==='IN'?'in':'out')+(counted?'':' ignored')+'"><span class="t">'+time(p.time)+'</span><span class="pill '+esc(p.type)+'">'+esc(p.type)+'</span><span>'+note+'</span><span class="muted">'+esc(p.device||'')+(how?' · '+esc(how):'')+'</span></li>'+gap;
+  }).join('');
+  const ins=timeline.filter(p=>p.type==='IN').length,outs=timeline.filter(p=>p.type==='OUT').length;
+  byId('dayDetailTitle').textContent=(e.employeeName||'#'+deviceUserId)+' (#'+deviceUserId+') · '+new Date(date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  byId('dayDetailBody').innerHTML='<div class="daystats">'+
+    '<div class="daystat"><small>First IN → Last OUT</small><b>'+(e.spanMs?duration(e.spanMs):'—')+'</b><small>'+time(e.firstIn)+' → '+time(e.lastOut)+'</small></div>'+
+    '<div class="daystat brk"><small>Break (outside)</small><b>−'+duration(e.breakMs||0)+'</b><small>'+(e.breaks||[]).length+' time(s) went out</small></div>'+
+    '<div class="daystat inside"><small>Total time inside</small><b>'+duration(e.insideMs||0)+'</b><small>span − break</small></div>'+
+    '<div class="daystat"><small>Punches</small><b>'+timeline.length+'</b><small>'+ins+' IN · '+outs+' OUT</small></div></div>'+
+    (e.hasIncompletePunch?'<div class="note" style="color:#c92a2a;margin:0 0 12px"><b>Incomplete:</b> there is no OUT after the first IN (or no IN at all), so time inside cannot be calculated.</div>':'')+
+    '<h3 style="margin:8px 0 10px">All IN / OUT punches</h3><ul class="tl">'+(items||'<li>No punches.</li>')+'</ul>';
+  byId('dayDetailModal').classList.add('open');
 }
 function downloadAttendanceCsv(){
   const matrix=attendanceMatrix();if(!matrix.rows.length)return alert('Select an employee/date range and click Show attendance first.');

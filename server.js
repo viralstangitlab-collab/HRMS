@@ -280,6 +280,8 @@ function buildRangeSummary(records, fromText, toText, selectedEmployee, employee
     return buildDailyReport(dayRecords, effectiveEnd).map((entry) => ({
       date,
       ...entry,
+      // Compact punch list for the day-detail popup on the dashboard.
+      timeline: entry.punches.map((p) => ({ time: p.recordTime, type: p.punchType, device: p.deviceIp, mode: p.raw?.mode ?? null })),
       punches: undefined,
     }));
   });
