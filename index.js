@@ -2,8 +2,17 @@ require('./src/timezone');
 require('dotenv').config();
 const { connectDB } = require('./src/db');
 const { syncOnce } = require('./src/sync');
+const { configuredDevices } = require('./src/device');
 
 async function main() {
+  // Render may still use the legacy `node index.js` start command. In a cloud
+  // web service there is no office-LAN device to poll, so run the dashboard
+  // instead of exiting with "No device configured".
+  if (!configuredDevices().length && process.env.RENDER) {
+    console.log('[startup] no LAN device configured; starting web service');
+    require('./server');
+    return;
+  }
   await connectDB();
 
   const watch = process.argv.includes('--watch');
