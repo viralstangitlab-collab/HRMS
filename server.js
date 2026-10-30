@@ -656,6 +656,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 async function main() {
+  // Finish MongoDB/auth initialization before accepting requests. This avoids
+  // login queries hitting Mongoose while the connection is still buffering.
+  await connectDB();
+  await ensureLoginUser();
   await new Promise((resolve, reject) => {
     const onError = (error) => {
       if (error.code === 'EADDRINUSE') {
@@ -674,12 +678,5 @@ async function main() {
   // Render and other cloud hosts cannot reach the office LAN. Keep the web
   // service available even when the optional local device bridge is disabled.
   console.log('[device] biometric sync disabled; manual attendance mode');
-  try {
-    await connectDB();
-    await ensureLoginUser();
-  } catch (error) {
-    console.error('[fatal] database startup failed:', error.message);
-    return;
-  }
 }
 main().catch((error) => { console.error('[fatal]', error.message); process.exit(1); });
