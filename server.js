@@ -10,7 +10,7 @@ const Attendance = require('./src/models/Attendance');
 const Employee = require('./src/models/Employee');
 const User = require('./src/models/User');
 const AuthSession = require('./src/models/AuthSession');
-const { syncOnce, syncStatus } = require('./src/sync');
+const { syncStatus } = require('./src/sync');
 const { startLogClientServer } = require('./src/logclient');
 
 const port = Number(process.env.PORT || process.env.APP_PORT || 3001);
@@ -649,11 +649,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (req.method === 'POST' && url.pathname === '/api/sync') {
-      if ((process.env.DEVICE_MODE || 'push').toLowerCase() !== 'pull') {
-        return json(res, 200, { message: 'Push mode active; waiting for device punches' });
-      }
-      syncOnce().catch((error) => console.error('[sync]', error.message));
-      return json(res, 202, { message: 'Sync started' });
+      return json(res, 200, { message: 'Biometric sync is disabled; use manual attendance entry' });
     }
     json(res, 404, { error: 'Not found' });
   } catch (error) { json(res, 500, { error: error.message }); }
@@ -677,21 +673,13 @@ async function main() {
   });
   // Render and other cloud hosts cannot reach the office LAN. Keep the web
   // service available even when the optional local device bridge is disabled.
-  if (String(process.env.DISABLE_DEVICE_LISTENER || '').toLowerCase() !== 'true') {
-    startLogClientServer(Number(process.env.HOST_PC_PORT || 5005));
-  } else {
-    console.log('[device] local device listener disabled');
-  }
+  console.log('[device] biometric sync disabled; manual attendance mode');
   try {
     await connectDB();
     await ensureLoginUser();
   } catch (error) {
     console.error('[fatal] database startup failed:', error.message);
     return;
-  }
-  if ((process.env.DEVICE_MODE || 'push').toLowerCase() === 'pull') {
-    syncOnce().catch((error) => console.error('[sync]', error.message));
-    setInterval(() => syncOnce().catch((error) => console.error('[sync]', error.message)), intervalMs);
   }
 }
 main().catch((error) => { console.error('[fatal]', error.message); process.exit(1); });
