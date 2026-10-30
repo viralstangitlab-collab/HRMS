@@ -672,10 +672,23 @@ async function main() {
       resolve();
     });
   });
-  // Then initialize MongoDB/authentication. The dashboard remains reachable
-  // while this startup work completes.
-  await connectDB();
-  await ensureLoginUser();
+  // Then initialize MongoDB/authentication. Keep the web process alive if
+  // Atlas is temporarily unavailable so Render does not return a 502.
+  try {
+    await connectDB();
+    await ensureLoginUser();
+  } catch (error) {
+    console.error('[db] startup connection failed:', error.message);
+    setInterval(async () => {
+      try {
+        await connectDB();
+        await ensureLoginUser();
+        console.log('[db] reconnected successfully');
+      } catch (retryError) {
+        console.error('[db] retry failed:', retryError.message);
+      }
+    }, 30000);
+  }
   // Render and other cloud hosts cannot reach the office LAN. Keep the web
   // service available even when the optional local device bridge is disabled.
   console.log('[device] biometric sync disabled; manual attendance mode');
