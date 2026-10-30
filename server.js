@@ -660,8 +660,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 async function main() {
-  await connectDB();
-  await ensureLoginUser();
   await new Promise((resolve, reject) => {
     const onError = (error) => {
       if (error.code === 'EADDRINUSE') {
@@ -677,7 +675,20 @@ async function main() {
       resolve();
     });
   });
-  startLogClientServer(Number(process.env.HOST_PC_PORT || 5005));
+  // Render and other cloud hosts cannot reach the office LAN. Keep the web
+  // service available even when the optional local device bridge is disabled.
+  if (String(process.env.DISABLE_DEVICE_LISTENER || '').toLowerCase() !== 'true') {
+    startLogClientServer(Number(process.env.HOST_PC_PORT || 5005));
+  } else {
+    console.log('[device] local device listener disabled');
+  }
+  try {
+    await connectDB();
+    await ensureLoginUser();
+  } catch (error) {
+    console.error('[fatal] database startup failed:', error.message);
+    return;
+  }
   if ((process.env.DEVICE_MODE || 'push').toLowerCase() === 'pull') {
     syncOnce().catch((error) => console.error('[sync]', error.message));
     setInterval(() => syncOnce().catch((error) => console.error('[sync]', error.message)), intervalMs);
