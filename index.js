@@ -11,6 +11,8 @@ async function main() {
   if (!configuredDevices().length && process.env.RENDER) {
     console.log('[startup] no LAN device configured; starting web service');
     require('./server');
+    // Keep the legacy Render start command alive while server.js initializes.
+    setInterval(() => {}, 60 * 60 * 1000);
     return;
   }
   await connectDB();
