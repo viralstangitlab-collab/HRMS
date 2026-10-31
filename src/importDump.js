@@ -20,9 +20,15 @@ const EMPLOYEE_NAME_OVERRIDES = new Map([
   ['00000045', 'Vikash'],
   ['00000046', 'Heena'],
   ['00000047', 'Affreen'],
-  ['00000048', 'Anjalica'],
+  ['00000048', 'Angelica'],
   ['00000049', 'Robin'],
   ['00000050', 'Sukhpreet'],
+  ['00000051', 'Harsh'],
+  ['00000052', 'Amit'],
+  ['00000053', 'Jhanvi'],
+  ['00000054', 'Nikhil'],
+  ['00000055', 'Aina'],
+  ['00000056', 'Manvendra'],
 ]);
 
 function splitRow(line) {
